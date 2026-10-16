@@ -4,10 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\EmailVerification;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 
@@ -29,13 +28,11 @@ class AuthController extends Controller
 
         $otpCode = rand(100000, 999999);
 
-        DB::table('email_verifications')->updateOrInsert(
+        EmailVerification::updateOrCreate(
             ['email' => $request->email],
             [
                 'code' => $otpCode,
                 'expires_at' => Carbon::now()->addMinutes(10),
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
             ]
         );
 
@@ -68,8 +65,7 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $record = DB::table('email_verifications')
-            ->where('email', $request->email)
+        $record = EmailVerification::where('email', $request->email)
             ->where('code', $request->code)
             ->where('expires_at', '>', Carbon::now())
             ->first();
@@ -90,7 +86,7 @@ class AuthController extends Controller
             'avatar' => $request->avatar,
         ]);
 
-        DB::table('email_verifications')->where('email', $request->email)->delete();
+        EmailVerification::where('email', $request->email)->delete();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
