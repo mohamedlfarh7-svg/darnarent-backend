@@ -8,14 +8,17 @@ use App\Http\Requests\CompleteRegistrationRequest;
 use App\Http\Requests\LoginRequest;
 use App\Models\User;
 use App\Models\EmailVerification;
+use App\Mail\SendOtpMail;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 
 class AuthController extends Controller
 {
     public function sendOtp(SendOtpRequest $request)
     {
-        $otpCode = rand(100000, 999999);
+        $otpCode = (string) rand(100000, 999999);
 
         EmailVerification::updateOrCreate(
             ['email' => $request->email],
@@ -25,30 +28,19 @@ class AuthController extends Controller
             ]
         );
 
-        $avatarPath = null;
-        if ($request->hasFile('avatar')) {
-            $avatarPath = $request->file('avatar')->store('avatars/temp', 'public');
-        }
+        Mail::to($request->email)->send(new SendOtpMail($otpCode));
 
         return response()->json([
             'message' => 'تم إرسال رمز التحقق إلى بريدك الإلكتروني بنجاح',
             'email' => $request->email,
-            'temp_avatar' => $avatarPath,
-            'dev_otp' => $otpCode
         ], 200);
     }
 
     public function completeRegistration(CompleteRegistrationRequest $request)
     {
-        $record = EmailVerification::where('email', $request->email)
-            ->where('code', $request->code)
-            ->where('expires_at', '>', Carbon::now())
-            ->first();
-
-        if (!$record) {
-            return response()->json([
-                'message' => 'رمز التحقق غير صحيح أو انتهت صلاحيته'
-            ], 400);
+        $avatarPath = null;
+        if ($request->hasFile('avatar')) {
+            $avatarPath = $request->file('avatar')->store('avatars', 'public');
         }
 
         $user = User::create([
@@ -58,7 +50,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'client',
-            'avatar' => $request->avatar,
+            'avatar' => $avatarPath,
         ]);
 
         EmailVerification::where('email', $request->email)->delete();
@@ -88,6 +80,15 @@ class AuthController extends Controller
             'message' => 'تم تسجيل الدخول بنجاح',
             'user' => $user,
             'token' => $token
-        ]);
+        ], 200);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'message' => 'تم تسجيل الخروج بنجاح'
+        ], 200);
     }
 }
